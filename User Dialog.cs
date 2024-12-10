@@ -8,97 +8,66 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
-namespace Fill_Table
+namespace Create_Editable_Cells
 {
-    public partial class UserDialog : Form
+    public partial class Preference : Form
     {
-        private bool isValidatedStartNumber = false;
-        private bool isValidatedWidth = false;
-        private bool isValidatedHeight = false;
+        private Main macro;
 
-        internal int startNumber;
-        internal double width;
-        internal double height;
-
-        public UserDialog()
+        public Preference(Main macro)
         {
             InitializeComponent();
+
+            this.macro = macro;
+
+            outlineWidthComboBox.DataSource = new double[] { 0.00, 0.05, 0.1, 0.2, 0.25, 0.5, 1 };
         }
 
-        private void UserDialog_Load(object sender, EventArgs e) { }
+        private void Preference_Load(object sender, EventArgs e) { }
 
-        public void Calculate_Click(object sender, EventArgs e)
+        private void startNumberTextBox_TextChanged(object sender, EventArgs e)
         {
-            DialogResult = DialogResult.OK;
-            Close();
+            string text = (sender as TextBox).Text;
+
+            macro.RefreshStartNumber(text, previewCheckBox.Checked);
         }
 
-        private void StartNum_TextChanged(object sender, EventArgs e)
+        private void cellWidthTextBox_TextChanged(object sender, EventArgs e)
         {
-            string s = (sender as TextBox).Text;
-            
-            if (int.TryParse(s, out startNumber))
-            {
-                isValidatedStartNumber = true;
-                buttonSetActive();
-            }
-            else
-            {
-                isValidatedStartNumber = false;
-                buttonSetActive();
-                return;
-            }
+            TextBox input = sender as TextBox;
+
+            createMapButton.Enabled = macro.RefreshCellWidth(input.Text, previewCheckBox.Checked);
         }
 
-        private void WidthNum_TextChanged(object sender, EventArgs e)
+        private void cellHeightTextBox_TextChanged(object sender, EventArgs e)
         {
-            string s = (sender as TextBox).Text;
+            TextBox input = sender as TextBox;
 
-            if (double.TryParse(s, out width) && width > 0d)
-            {
-                isValidatedWidth = true;
-                buttonSetActive();
-            }
-            else
-            {
-                isValidatedWidth = false;
-                buttonSetActive();
-                return;
-            }
+            createMapButton.Enabled = macro.RefreshCellHeight(input.Text, previewCheckBox.Checked);
         }
 
-        private void HeightNum_TextChanged(object sender, EventArgs e)
+        private void marginNumericUpDown_ValueChanged(object sender, EventArgs e)
         {
-            string s = (sender as TextBox).Text;
+            NumericUpDown input = sender as NumericUpDown;
 
-            if (double.TryParse(s, out height) && height > 0d)
-            {
-                isValidatedHeight = true;
-                buttonSetActive();
-            }
-            else
-            {
-                isValidatedHeight = false;
-                buttonSetActive();
-                return;
-            }
+            macro.RefreshMargin(input.Value, previewCheckBox.Checked);
+        }
+        
+        private void OutlineWidth_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            ComboBox input = sender as ComboBox;
+
+            macro.RefreshOutline(input.SelectedValue.ToString(), previewCheckBox.Checked);
         }
 
-        private void buttonSetActive()
+        private void previewCheckBox_CheckedChanged(object sender, EventArgs e)
         {
-            if(isValidatedStartNumber)
-            {
-                if(isValidatedWidth)
-                {
-                    if(isValidatedHeight)
-                    {
-                        calculateButton.Enabled = true;
-                        return;
-                    }
-                }
-            }
+            macro.CreatePreviewMap();
+        }
 
-            calculateButton.Enabled = false;
+        private void createMapButton_Click(object sender, EventArgs e)
+        {
+            macro.CreateMap();
         }
     }
 }
