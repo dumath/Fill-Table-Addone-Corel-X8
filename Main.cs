@@ -6,111 +6,286 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using Corel.Interop.VGCore;
 
-namespace Fill_Table
+namespace Create_Editable_Cells
 {
     public partial class Main
     {
-        // Врезка для себя. Пункт = 0.3528f;
+        public const double K_SIDES = 2d; // Коэффициент граней.
+        public const double K_PRVIEW_NxN = 3d; // Коэффициент Column x Row.
 
-        private int startNum;
+        private Document activeDocument; // Пока не используется. Привязка документа, на котором был вызван плагин.
+        private Page activePage; // Пока не используется. Тоже самое.
 
-        private double cellHeight;
-        private double cellWidth;
+        private Page previewPage;
 
-        private DialogResult requirmentResponse;
+        #region Требования пользователя.
+        private int startNumber;
+        //TODO: изменится.
+        public bool RefreshStartNumber(string text, bool isPreviw)
+        {
+            text = string.Concat(text.Where(x => char.IsDigit(x)));
 
-        private void Startup()
+            if (int.TryParse(text, out startNumber))
+                return isAllowedCreateMap();
+            else
+                return false;
+        }
+
+        private double cellWidth = 0d;
+        public bool RefreshCellWidth(string text, bool isPreview)
+        {
+            bool result = false;
+
+            if (double.TryParse(text, out cellWidth))
+            {
+                result = isAllowedCreateMap();
+
+                if (result && isPreview)
+                    CreatePreviewMap();
+            }
+
+            return result;
+        }
+
+
+        private double cellHeight = 0d;
+        public bool RefreshCellHeight(string text, bool isPreview)
+        {
+            bool result = false;
+
+            if (double.TryParse(text, out cellHeight))
+            {
+                result = isAllowedCreateMap();
+
+                if (result && isPreview)
+                    CreatePreviewMap();
+            }
+
+            return result;
+        }
+
+        private double margin = 0d;
+        public bool RefreshMargin(decimal value, bool isPreview)
+        {
+            bool result = result = isAllowedCreateMap();
+
+            margin = Convert.ToDouble(value);
+
+            if (result && isPreview)
+                CreatePreviewMap();
+
+            return result;
+        }
+
+        private double outline = 0d;
+        public bool RefreshOutline(string text, bool isPreview)
+        {
+            bool result = false;
+
+            if (double.TryParse(text, out outline))
+            {
+                result = isAllowedCreateMap();
+
+                if (result && isPreview)
+                    CreatePreviewMap();
+            }
+
+            return result;
+        }
+        #endregion
+
+        private void Startup() { if (app.ActiveDocument != null) app.ActiveDocument.Unit = cdrUnit.cdrMillimeter; }
+
+        [CgsAddInMacro]
+        public void Run()
         {
             if (app.ActiveDocument != null)
             {
-                app.ActiveDocument.Unit = cdrUnit.cdrMillimeter;
-
-                try
+                if (app.ActivePage.Shapes.Count > 0)
                 {
-                    UserDialog requirement = new UserDialog();
-                    requirement.ShowDialog();
-
-                    requirmentResponse = requirement.DialogResult;
-
-                    if (requirement.DialogResult == DialogResult.OK)
-                    {
-                        startNum = requirement.startNumber;
-                        cellHeight = requirement.height;
-                        cellWidth = requirement.width;
-                    }
+                    // Пользователь должен сам решить, что удалить.
+                    MessageBox.Show("Активный документ содержит элементы.", caption: "Уведомление");
                 }
-                catch (Exception ex)
+                else
                 {
-                    MessageBox.Show(ex.Message);
+                    Preference userPreference = new Preference(this);
+                    userPreference.ShowDialog();
                 }
             }
             else
             {
-                MessageBox.Show("Сначала нужно создать документ.", caption:"Уведомление");
+                // Пользователь должен сам решить, какой формат листа нужно заполнять.
+                MessageBox.Show("Сначала нужно создать документ.", caption: "Уведомление");
             }
         }
 
-        [CgsAddInMacro]
-        public void Macro1()
+        public void CreateMap()
         {
-            if (requirmentResponse == DialogResult.OK)
-            {
-                if (app.ActiveDocument != null)
-                {
-                    if (app.ActiveLayer.Shapes.Count != 0)
-                    {
-                        DialogResult responseDeleting = MessageBox.Show("Документ не пустой. Очистить документ и запустить создание таблицы?", "Подтверждение", MessageBoxButtons.OKCancel);
+            app.ActiveDocument.Pages.First.Activate();
 
-                        if (responseDeleting == DialogResult.Cancel)
+            removePreviewPage();
+
+            double yStartPosition = app.ActivePage.TopY - (margin + outline);
+            double xStartPosition = app.ActivePage.LeftX + (margin + outline);
+
+            double yOffset = cellHeight + (margin + outline) * K_SIDES;
+            double xOffset = cellWidth + (margin + outline) * K_SIDES;
+
+            double yEndPosition;
+            double xEndPosition;
+
+            remap(app.ActivePage, out xEndPosition, out yEndPosition, xOffset, yOffset);
+
+            yEndPosition = app.ActivePage.SizeHeight - yEndPosition;
+
+            Shape rect;
+            Shape text;
+
+            for (double yPos = yStartPosition; yPos > yEndPosition; yPos -= yOffset)
+            {
+                for (double xPos = xStartPosition; xPos < xEndPosition; xPos += xOffset)
+                {
+                    rect = app.ActiveLayer.CreateRectangle(xPos, yPos, xPos + cellWidth, yPos - cellHeight);
+
+                    if(outline > 0d)
+                    {
+                        rect.Outline.SetProperties(Width: outline);
+                        rect.Outline.Justification = cdrOutlineJustification.cdrOutlineJustificationOutside;
+                    }
+                    else
+                    {
+                        rect.Outline.SetNoOutline();
+                    }
+
+                    text = app.ActiveLayer.CreateParagraphText(rect.LeftX, rect.TopY, rect.RightX, rect.BottomY, Text: startNumber.ToString());
+                    text.Text.AlignProperties.Alignment = cdrAlignment.cdrCenterAlignment;
+                    text.Text.Frame.VerticalAlignment = cdrVerticalAlignment.cdrCenterJustify;
+
+                    rect.PlaceTextInside(text);
+
+                    startNumber++;
+                }
+            }
+        }
+
+        public void CreatePreviewMap()
+        {
+            if (isAllowedCreateMap())
+            {
+                int previewStartNumber = startNumber;
+
+                double pageWidth = (cellWidth + (margin + outline) * K_SIDES) * K_PRVIEW_NxN;
+                double pageHeight = (cellHeight + (margin + outline) * K_SIDES) * K_PRVIEW_NxN;
+
+                сreatePreviewPage(pageWidth, pageHeight);
+
+                double yStartPosition = app.ActivePage.TopY - (margin + outline);
+                double xStartPosition = app.ActivePage.LeftX + (margin + outline);
+
+                double yEndPosition = app.ActivePage.BottomY;
+                double xEndPosition = app.ActivePage.RightX;
+
+                double yOffset = cellHeight + (margin + outline) * K_SIDES;
+                double xOffset = cellWidth + (margin + outline) * K_SIDES;
+
+                Shape rect;
+                Shape text;
+
+                for (double yPos = yStartPosition; yPos > yEndPosition; yPos -= yOffset)
+                {
+                    for (double xPos = xStartPosition; xPos < xEndPosition; xPos += xOffset)
+                    {
+                        rect = app.ActiveLayer.CreateRectangle(xPos, yPos, xPos + cellWidth, yPos - cellHeight);
+
+                        if (outline > 0d)
                         {
-                            return;
+                            rect.Outline.SetProperties(Width: outline);
+                            rect.Outline.Justification = cdrOutlineJustification.cdrOutlineJustificationOutside;
                         }
                         else
                         {
-                            string currentName = app.ActiveLayer.Name;
-
-                            app.ActiveLayer.Delete();
-                            app.ActivePage.CreateLayer(currentName);
+                            rect.Outline.SetNoOutline();
                         }
+
+                        text = app.ActiveLayer.CreateParagraphText(rect.LeftX, rect.TopY, rect.RightX, rect.BottomY, Text: previewStartNumber.ToString());
+                        text.Text.AlignProperties.Alignment = cdrAlignment.cdrCenterAlignment;
+                        text.Text.Frame.VerticalAlignment = cdrVerticalAlignment.cdrCenterJustify;
+
+                        rect.PlaceTextInside(text);
+
+                        previewStartNumber++;
                     }
-
-                    fillTable();
                 }
             }
         }
 
-        private double remap(double width)
+        #region Дополнительные методы Макроса. Внутренние.
+        /// <summary>
+        /// Можно ли строить карту ячеек. Смотрит введеные значения пользователя на двух основных свойствах.
+        /// </summary>
+        /// <returns> Резулатат проверки. </returns>
+        private bool isAllowedCreateMap()
         {
-            width /= cellWidth;
-            width = Math.Truncate(width);
+            bool result = false;
 
-            return width *= cellWidth;
+            if (cellWidth > 0d && cellHeight > 0d)
+                result = true;
+
+            return result;
         }
 
-        private void fillTable()
+        /// <summary>
+        /// Создает отдельную превью - страницу в текущем документе.
+        /// </summary>
+        /// <param name="pageWidth"> Ширина страницы </param>
+        /// <param name="pageHeight"> Высота страницы </param>
+        public void сreatePreviewPage(double pageWidth, double pageHeight)
         {
-            double remapWidth = remap(app.ActivePage.SizeWidth);
-
-            Shape createdShape;
-
-            double offsetX;
-            double offsetY;
-
-            for (double positionY = app.ActivePage.TopY; positionY > app.ActivePage.BottomY; positionY -= cellHeight)
+            if (previewPage == null)
             {
-                for (double positionX = app.ActivePage.LeftX; positionX < remapWidth; positionX += cellWidth)
+                previewPage = app.ActiveDocument.AddPagesEx(1, pageWidth, pageHeight);
+                previewPage.Activate();
+            }
+            else
+            {
+                previewPage.SetSize(pageWidth, pageHeight);
+
+                if (previewPage.ActiveLayer.Shapes.Count > 0)
                 {
-                    offsetX = positionX + cellWidth;
-                    offsetY = positionY - cellHeight;
-
-                    createdShape = app.ActiveLayer.CreateParagraphText(positionX, positionY, offsetX, offsetY, startNum.ToString());
-
-                    createdShape.Text.AlignProperties.Alignment = cdrAlignment.cdrCenterAlignment;
-                    createdShape.Text.Frame.VerticalAlignment = cdrVerticalAlignment.cdrCenterJustify;
-
-                    startNum++;
+                    previewPage.ActiveLayer.Delete();
+                    previewPage.CreateLayer("Preview_Layer");
+                    previewPage.ActiveLayer.Activate();
                 }
             }
         }
+
+        /// <summary>
+        /// Удаляет страницу превью из документа.
+        /// </summary>
+        public void removePreviewPage()
+        {
+            if (previewPage != null)
+                previewPage.Delete();
+        }
+
+        /// <summary>
+        /// Получает размер заполненной страницы ячейками, на основе требований пользователя.
+        /// </summary>
+        /// <param name="activePage"> Страница, к которой применяется расчет </param>
+        /// <param name="pageWidth"> Заполненная ячейками ширина страницы </param>
+        /// <param name="pageHeight"> Заполненная ячейками высота страницы </param>
+        /// <param name="cellWidth"> Ширина ячейки </param>
+        /// <param name="cellHeight"> Высота ячейки </param>
+        private void remap(Page activePage, out double pageWidth, out double pageHeight, double cellWidth, double cellHeight)
+        {
+            pageWidth = activePage.SizeWidth / cellWidth;
+            pageWidth = Math.Truncate(pageWidth);
+            pageWidth *= cellWidth;
+
+            pageHeight = activePage.SizeHeight / cellHeight;
+            pageHeight = Math.Truncate(pageHeight);
+            pageHeight *= cellHeight;
+        }
+        #endregion
     }
 }
