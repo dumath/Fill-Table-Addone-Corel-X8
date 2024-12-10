@@ -1,8 +1,5 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 using Corel.Interop.VGCore;
 
@@ -19,18 +16,28 @@ namespace Create_Editable_Cells
         private Page previewPage;
 
         #region Требования пользователя.
+
+        #region Число первой ячейки.
         private int startNumber;
-        //TODO: изменится.
-        public bool RefreshStartNumber(string text, bool isPreviw)
+        public string RefreshStartNumber(string text, bool isPreviw)
         {
             text = string.Concat(text.Where(x => char.IsDigit(x)));
 
-            if (int.TryParse(text, out startNumber))
-                return isAllowedCreateMap();
-            else
-                return false;
-        }
+            bool result = false;
 
+            if (int.TryParse(text, out startNumber))
+            {
+                result = isAllowedCreateMap();
+
+                if (result && isPreviw)
+                    CreatePreviewMap();
+            }
+
+            return text;
+        }
+        #endregion
+
+        #region Ширина ячейки.
         private double cellWidth = 0d;
         public bool RefreshCellWidth(string text, bool isPreview)
         {
@@ -46,8 +53,9 @@ namespace Create_Editable_Cells
 
             return result;
         }
+        #endregion
 
-
+        #region Высота ячейки.
         private double cellHeight = 0d;
         public bool RefreshCellHeight(string text, bool isPreview)
         {
@@ -63,7 +71,9 @@ namespace Create_Editable_Cells
 
             return result;
         }
+        #endregion
 
+        #region Отступ от края ячейки.
         private double margin = 0d;
         public bool RefreshMargin(decimal value, bool isPreview)
         {
@@ -76,7 +86,9 @@ namespace Create_Editable_Cells
 
             return result;
         }
+        #endregion
 
+        #region Ширина абриса.
         private double outline = 0d;
         public bool RefreshOutline(string text, bool isPreview)
         {
@@ -92,6 +104,8 @@ namespace Create_Editable_Cells
 
             return result;
         }
+        #endregion
+
         #endregion
 
         private void Startup() { if (app.ActiveDocument != null) app.ActiveDocument.Unit = cdrUnit.cdrMillimeter; }
@@ -121,10 +135,6 @@ namespace Create_Editable_Cells
 
         public void CreateMap()
         {
-            app.ActiveDocument.Pages.First.Activate();
-
-            removePreviewPage();
-
             double yStartPosition = app.ActivePage.TopY - (margin + outline);
             double xStartPosition = app.ActivePage.LeftX + (margin + outline);
 
@@ -219,6 +229,20 @@ namespace Create_Editable_Cells
             }
         }
 
+        /// <summary>
+        /// Удаляет страницу превью из документа.
+        /// </summary>
+        public void RemovePreviewPage()
+        {
+            if (previewPage != null)
+            {
+                app.ActiveDocument.Pages.First.Activate();
+
+                previewPage.Delete();
+                previewPage = null;
+            }
+        }
+
         #region Дополнительные методы Макроса. Внутренние.
         /// <summary>
         /// Можно ли строить карту ячеек. Смотрит введеные значения пользователя на двух основных свойствах.
@@ -239,7 +263,7 @@ namespace Create_Editable_Cells
         /// </summary>
         /// <param name="pageWidth"> Ширина страницы </param>
         /// <param name="pageHeight"> Высота страницы </param>
-        public void сreatePreviewPage(double pageWidth, double pageHeight)
+        private void сreatePreviewPage(double pageWidth, double pageHeight)
         {
             if (previewPage == null)
             {
@@ -249,6 +273,7 @@ namespace Create_Editable_Cells
             else
             {
                 previewPage.SetSize(pageWidth, pageHeight);
+                previewPage.Activate();
 
                 if (previewPage.ActiveLayer.Shapes.Count > 0)
                 {
@@ -257,15 +282,6 @@ namespace Create_Editable_Cells
                     previewPage.ActiveLayer.Activate();
                 }
             }
-        }
-
-        /// <summary>
-        /// Удаляет страницу превью из документа.
-        /// </summary>
-        public void removePreviewPage()
-        {
-            if (previewPage != null)
-                previewPage.Delete();
         }
 
         /// <summary>
