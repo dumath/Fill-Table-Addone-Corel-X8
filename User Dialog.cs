@@ -22,7 +22,9 @@ namespace Create_Editable_Cells
         {
             string text = (sender as TextBox).Text;
 
-            macro.RefreshStartNumber(text, previewCheckBox.Checked);
+            (sender as TextBox).Text = macro.RefreshStartNumber(text, previewCheckBox.Checked);
+
+            (sender as TextBox).DeselectAll();
         }
 
         private void cellWidthTextBox_TextChanged(object sender, EventArgs e)
@@ -55,13 +57,22 @@ namespace Create_Editable_Cells
 
         private void previewCheckBox_CheckedChanged(object sender, EventArgs e)
         {
-            if((previewCheckBox as CheckBox).Checked)
-               macro.CreatePreviewMap();
+            if ((previewCheckBox as CheckBox).Checked)
+                macro.CreatePreviewMap();
+            else
+                macro.RemovePreviewPage();
         }
 
         private void createMapButton_Click(object sender, EventArgs e)
         {
+            previewCheckBox.Checked = false;
+
             macro.CreateMap();
+        }
+
+        private void Preference_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            macro.RemovePreviewPage();
         }
     }
 }
