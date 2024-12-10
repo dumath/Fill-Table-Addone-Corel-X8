@@ -1,11 +1,4 @@
 using System;
-using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace Create_Editable_Cells
@@ -62,7 +55,8 @@ namespace Create_Editable_Cells
 
         private void previewCheckBox_CheckedChanged(object sender, EventArgs e)
         {
-            macro.CreatePreviewMap();
+            if((previewCheckBox as CheckBox).Checked)
+               macro.CreatePreviewMap();
         }
 
         private void createMapButton_Click(object sender, EventArgs e)
